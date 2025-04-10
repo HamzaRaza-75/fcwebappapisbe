@@ -9,7 +9,7 @@ Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
 
 
 
-Route::get('/jug', function () {
+Route::get('/jugnu', function () {
     return response()->json(['data' => 'Hi hamza'], 200);
 });
 
