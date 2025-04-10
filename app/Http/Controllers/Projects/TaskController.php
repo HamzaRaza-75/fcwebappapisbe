@@ -19,7 +19,7 @@ use Spatie\Permission\Models\Role;
 class TaskController extends Controller
 {
 
-    public function index(): View
+    public function index()
     {
         $teamforform = Team::all();
 
@@ -54,13 +54,14 @@ class TaskController extends Controller
         $todaysdeadline = Task::whereIn('team_id', $logged_user)->where('status', 'incomplete')
             ->whereRaw('CAST(deadline_date AS DATE) = ?', [Carbon::today()->toDateString()])
             ->count();
-        return view('task.index', compact('tasks', 'totaltasks', 'completedtasks', 'activetasks', 'todaysdeadline', 'teamforform'));
+
+        return response()->json(['data' => [$tasks, $totaltasks, $completedtasks, $activetasks, $todaysdeadline, $teamforform]], 200);
     }
 
     /**
      * Show the form for creating a new resource.
      */
-    public function create(): View
+    public function create()
     {
         $teams = Team::withWhereHas('userteam', function ($query) {
             $query->whereHas('roles', function (Builder $roleQuery) {
@@ -71,7 +72,7 @@ class TaskController extends Controller
 
         $clients = Client::all();
 
-        return view('task.add', compact('teams', 'clients'));
+        return response()->json(['data' => [$teams, $clients]], 200);
     }
 
     /**
@@ -120,11 +121,11 @@ class TaskController extends Controller
             ]);
 
             DB::commit();
+            return response()->json(['data' => 'Task has been Created successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-
-        return redirect()->route('task.index');
     }
 
     /**
@@ -150,20 +151,21 @@ class TaskController extends Controller
             }
             $taskmilestone->tdl_count = $i;
         }
-        return view('task.view', compact('task'));
+
+        return response()->json(['data' => $task], 200);
     }
 
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id): View
+    public function edit(string $id)
     {
         $task = Task::find($id);
         $users = User::with('userdetail')->where('id', '!=', Auth::user()->id)->get();
         $teams = Team::whereNotNull('company_id')->get();
 
 
-        return view('task.edit', compact('task', 'users', 'teams'));
+        return response()->json(['data' => [$task, $users, $teams]], 200);
     }
 
     /**
@@ -212,11 +214,11 @@ class TaskController extends Controller
             ]);
 
             DB::commit();
+            return response()->json(['data' => 'Task has been updated successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-
-        return redirect()->route('task.index');
     }
 
     /**
@@ -225,19 +227,22 @@ class TaskController extends Controller
     public function destroy(string $id)
     {
         // Find the task by ID
-        $task = Task::findOrFail($id);
-        if ($task->created_by != Auth::user()->id) {
-            abort(403);
+        DB::beginTransaction();
+        try {
+            $task = Task::findOrFail($id);
+            if ($task->created_by != Auth::user()->id) {
+                abort(403);
+            }
+            $taskdelete = $task->update([
+                'status' => 'cancelled',
+            ]);
+            $task->taskmilestones()->delete();
+            DB::commit();
+            return response()->json(['data' => 'Task has been deleted successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
         }
-
-        $taskdelete = $task->update([
-            'status' => 'cancelled',
-        ]);
-
-        $task->taskmilestones()->delete();
-
-
-        return redirect()->route('task.index');
     }
 
 
@@ -258,16 +263,21 @@ class TaskController extends Controller
             abort(403, 'You are not part of the assigned team');
         }
 
-        $task->update([
-            'completed_date' => Carbon::now(),
-        ]);
-
-        notify()->success('You have marked the project as completed', 'Task Completed Sucessfully');
-
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $task->update([
+                'completed_date' => Carbon::now(),
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'Task has been completed successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
+        }
     }
 
-    public function alltasks(Request $request): View
+    public function alltasks(Request $request)
     {
         $user = Team::whereHas('userteam', function (Builder $query) {
             $query->where('users.id', Auth::user()->id);
@@ -324,7 +334,8 @@ class TaskController extends Controller
         $cancelledtasks = $tasks->where('status', 'cancelled')->count();
         $activetasks = $tasks->where('status', 'incomplete')->count();
 
-        return view('task.all', compact('tasks', 'totaltasks', 'completedtasks', 'cancelledtasks', 'activetasks'));
+
+        return response()->json(['data' => [$tasks, $totaltasks, $completedtasks, $cancelledtasks, $activetasks]], 200);
     }
 
     public function createusers()

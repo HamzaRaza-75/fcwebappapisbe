@@ -3,14 +3,9 @@
 namespace App\Http\Controllers\TeamCaptain;
 
 use App\Http\Controllers\Controller;
-use App\Models\Company;
-use App\Models\Project;
-use App\Models\ProjectMilestone;
 use App\Models\Task;
-use App\Models\TaskMilestone;
 use App\Models\Team;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Models\Role;
@@ -28,14 +23,12 @@ class TcDashboardController extends Controller
         });
 
         $logged_team = $logged_user->userteam->pluck('id')->toArray();
-
         $teamcount = $logged_user->userteam()->count();
-
-        $active_tasks = Task::whereIn('team_id' , $logged_team)->with('client' , 'user' , 'team')->where('status' , 'incomplete')->get();
-
+        $active_tasks = Task::whereIn('team_id', $logged_team)->with('client', 'user', 'team')->where('status', 'incomplete')->get();
         $tasks = $active_tasks->count();
 
-        return view('teamcaptain.tcdashboard' , compact('teamcount' , 'total_users' , 'tasks' , 'active_tasks' , 'logged_user'));
+        $response = [$teamcount, $total_users, $tasks, $active_tasks, $logged_user];
+        return response()->json(['data' => $response], 200);
     }
 
     /**
@@ -63,9 +56,10 @@ class TcDashboardController extends Controller
      */
     public function show(string $id)
     {
-       $teams = Team::with('teamposition')->where('id' , $id)->get();
-       $roles = Role::all();
-       return view('dashboard' , compact('teams' , 'roles'));
+        $teams = Team::with('teamposition')->where('id', $id)->get();
+        $roles = Role::all();
+
+        return response()->json(['data' => [$teams, $roles]], 200);
     }
 
 

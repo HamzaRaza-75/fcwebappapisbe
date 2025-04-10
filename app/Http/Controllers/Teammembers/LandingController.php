@@ -14,12 +14,11 @@ class LandingController extends Controller
     public function index()
     {
 
-        $taskmilestone = TaskMilestone::assigneduser()->with('assignedFrom.userdetail' , 'assignedTo.userdetail' , 'task.user')
-        ->where('status' , 'incomplete')
-        ->where('seen_at' , null)
-        ->get();
-
-        return view('employess.dashboard' , compact('taskmilestone'));
+        $taskmilestone = TaskMilestone::assigneduser()->with('assignedFrom.userdetail', 'assignedTo.userdetail', 'task.user')
+            ->where('status', 'incomplete')
+            ->where('seen_at', null)
+            ->get();
+        return response()->json(['data' => [$taskmilestone]], 200);
     }
 
     /**

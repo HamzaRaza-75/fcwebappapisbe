@@ -8,14 +8,17 @@ use App\Models\Attendence;
 use App\Models\Team;
 use App\Models\User;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AttendenceController extends Controller
 {
 
 
-    public function index(): View
+    public function index(): JsonResponse
     {
 
         $users = User::with('userteam')->find(Auth::user()->id);
@@ -31,8 +34,7 @@ class AttendenceController extends Controller
             ->values()
             ->all();
 
-
-        return view('teamcaptain.attandance.index', compact('users'));
+        return response()->json(['data' => $users], 200);
     }
 
     public function show(string $id)
@@ -59,34 +61,46 @@ class AttendenceController extends Controller
             ];
         });
 
-        return response()->json($event);
+        return response()->json(['data' => $event], 200);
     }
 
 
     public function checkIn()
     {
-
-        $attandence = Attendence::create([
-            'user_id' => Auth::user()->id,
-            'employe_check_in' => Carbon::now(),
-        ]);
-
-        return redirect()->back()->with('success', 'Checked in successfully');
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $attandence = Attendence::create([
+                'user_id' => Auth::user()->id,
+                'employe_check_in' => Carbon::now(),
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'You are logged in successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. some error occur while logging in'], 500);
+        }
     }
 
     public function checkOut(Request $request)
     {
         // dd($request);
 
-        $checkin = Attendence::where('user_id', $request->user()->id)
-            ->latest()
-            ->first();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $checkin = Attendence::where('user_id', $request->user()->id)
+                ->latest()
+                ->first();
 
-        $checkin->update([
-            'employe_check_out' => Carbon::now(),
-        ]);
-
-        // Redirect back with success message
-        return redirect()->back()->with('success', 'Checked out successfully');
+            $checkin->update([
+                'employe_check_out' => Carbon::now(),
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'You are logged out successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops.some error occured'], 500);
+        }
     }
 }

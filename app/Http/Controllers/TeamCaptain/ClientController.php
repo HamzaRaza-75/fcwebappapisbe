@@ -16,7 +16,7 @@ class ClientController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): View
+    public function index()
     {
         $clients = Client::with(['tasksmilestones'])
             ->withCount(['tasks'])
@@ -48,7 +48,7 @@ class ClientController extends Controller
             }
         }
 
-        return view('clients.index', compact('clients', 'totalclients', 'totalprojects', 'totalearnings', 'totalworths'));
+        return response()->json(['data' => [$clients, $totalclients, $totalprojects, $totalearnings, $totalworths]], 200);
     }
 
     /**
@@ -69,46 +69,41 @@ class ClientController extends Controller
             'countary_name' => 'required',
         ]);
 
-
         DB::beginTransaction();
         try {
             Client::create($request->all());
             DB::commit();
-            notify()->success('Client has been added successfully', 'New Client Added');
+            return response()->json(['data' => 'Client Has Been added successfully'], 200);
         } catch (Exception $e) {
 
-            notify()->error('Oppsss ! Something went wrong');
             DB::rollBack();
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-
-        return to_route('client.index');
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(string $id, ClientTaskChart $chart)
+    public function show(string $id)
     {
         $client = Client::with([
             'tasks' => ['taskmilestones', 'team'],
         ])
             ->withCount('tasks')->findOrFail($id);
 
-
         $totalTaskMilestones = $client->tasks->sum(function ($task) {
             return $task->taskmilestones->sum('worth');
         });
 
-
-
         $totalWordCount = number_format($client->tasks->sum('word_count'));
 
-        $active_projects = $client->tasks->where('status', 'incomplete')->count() ;
+        $active_projects = $client->tasks->where('status', 'incomplete')->count();
         $cancelled_projects = $client->tasks->where('status', 'cancelled')->count();
         $completed_projects = $client->tasks->where('status', 'completed')->count();
 
+        $response = ['client' => $client, 'chartData' => [$cancelled_projects, $completed_projects, $active_projects], 'totalTaskMilestones' => $totalTaskMilestones, 'totalWordCount' => $totalWordCount];
 
-        return view('clients.view', compact('client', 'totalTaskMilestones', 'totalWordCount'), ['chart' => $chart->build([$cancelled_projects, $completed_projects , $active_projects])]);
+        return response()->json(['data' => $response], 200);
     }
 
     /**
@@ -132,9 +127,15 @@ class ClientController extends Controller
      */
     public function destroy(string $id)
     {
-        $clients = Client::find($id)->delete();
-
-        notify()->success('You have successfully deleted the client', 'Client Deleted Successfully');
-        return to_route('client.index');
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            Client::find($id)->delete();
+            DB::commit();
+            return response()->json(['data' => 'Client has been deleted successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. client  is not deleted'], 500);
+        }
     }
 }

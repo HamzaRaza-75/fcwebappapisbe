@@ -24,10 +24,19 @@ Route::middleware(['auth', 'role:team-member'])->prefix('employee')->group(funct
     Route::get('/tasks', [EmployeeTaskController::class, 'index'])->name('employee.task.index');
     Route::get('/tasks/{taskmilestone}', [EmployeeTaskController::class, 'show'])->name('employee.task.show');
     Route::post('/tasks/{taskmilestone}/create/todolist', [EmployeeTaskController::class, 'store'])->name('employee.task.store');
+
+    // *
+    // **
+    // ***
+    // *****
+    // ****** ispy be dehan dena hy iski apis shyad bnani prhen
     Route::get('/tasks/{id}/edit', [EmployeeTaskController::class, 'edit'])->name('employee.task.edit');
     Route::put('/tasks/{id}', [EmployeeTaskController::class, 'update'])->name('employee.task.update');
     Route::delete('/tasks/{id}', [EmployeeTaskController::class, 'destroy'])->name('employee.task.destroy');
-
-    // route for tasks controllers end here
+    // *
+    // **
+    // ***
+    // *****
+    // ****** ispy be dehan dena hy iski apis shyad bnani prhen
 
 });

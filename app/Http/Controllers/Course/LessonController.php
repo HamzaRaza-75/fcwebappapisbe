@@ -15,16 +15,15 @@ class LessonController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Course $course) : View
+    public function index(Course $course)
     {
         $course->load('lessons');
-
-        return view('employess.course.dashboard.lessons.index', compact('course'));
+        return response()->json(['data' => [$course]], 200);
     }
 
     public function create(Course $course)
     {
-        return view('employess.course.dashboard.lessons.create', compact('course'));
+        return response()->json(['data' => [$course]], 200);
     }
 
     public function store(Request $request, Course $course)
@@ -54,10 +53,10 @@ class LessonController extends Controller
             }
 
             DB::commit(); // Commit the transaction
-            notify()->success('Your lectures are added successfully', 'Lectures Added Successfully');
+            return response()->json(['data' => 'Data has been saved successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack(); // Rollback in case of error
-            notify()->error('Oops! Something went wrong. Kindly contact the developer for help' . $e->getMessage(), 'Lectures Not Added');
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
 
         return redirect()->route('course.index');
@@ -67,13 +66,12 @@ class LessonController extends Controller
     {
         // Eager load course with the specific lesson
         $lesson->load('course');
-
-        return view('lessons.show', compact('course', 'lesson'));
+        return response()->json(['data' => [$lesson]], 200);
     }
 
     public function edit(Course $course, Lesson $lesson)
     {
-        return view('lessons.edit', compact('course', 'lesson'));
+        return response()->json(['data' => [$course, $lesson]], 200);
     }
 
     public function update(Request $request, Course $course, Lesson $lesson)
@@ -83,15 +81,27 @@ class LessonController extends Controller
             'content' => 'required|string',
         ]);
 
-        $lesson->update($validatedData);
-
-        return redirect()->route('courses.lessons.index', $course);
+        DB::beginTransaction();
+        try {
+            $lesson->update($validatedData);
+            DB::commit();
+            return response()->json(['data' => 'Lesson has been updated successfully', $course], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
+        }
     }
 
     public function destroy(Course $course, Lesson $lesson)
     {
-        $lesson->delete();
-
-        return redirect()->route('courses.lessons.index', $course);
+        DB::beginTransaction();
+        try {
+            $lesson->delete();
+            DB::commit();
+            return response()->json(['data' => ['/n has been ( ) successfully', $course]], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
+        }
     }
 }

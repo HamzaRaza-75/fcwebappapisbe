@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Shedule;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Shedule;
+use Exception;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class SheduleController extends Controller
 {
@@ -14,12 +16,11 @@ class SheduleController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index() : View
+    public function index()
     {
         $shedules = Shedule::usershedule()->orderBy('end_time')->get();
         $shedulecount = $shedules->count();
-
-        return view('employess.shedule', compact('shedules'));
+        return response()->json(['data' => $shedules], 200);
     }
 
     public function store(Request $request)
@@ -30,25 +31,30 @@ class SheduleController extends Controller
             'end_time' => 'required|date|after_or_equal:today',
         ]);
 
-        Auth::user()->shedules()->create($request->all());
+        DB::beginTransaction();
+        try {
+            // Add your logic here
 
-        return redirect()->route('schedules.index')->with('success', 'Task scheduled successfully.');
+            Auth::user()->shedules()->create($request->all());
+
+            DB::commit();
+            return response()->json(['data' => 'Shedule has been added successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. shedule  is not added'], 500);
+        }
     }
 
-    public function edit(Shedule $shedules)
+    public function edit(Shedule $shedule)
     {
-        if ($shedules->user_id != Auth::id()) {
-            abort(403);
-        }
+        Gate::authorize('update', $shedule);
 
-        return view('schedules.edit', compact('schedule'));
+        return response()->json(['data' => $shedule], 200);
     }
 
-    public function update(Request $request, Shedule $shedules)
+    public function update(Request $request, Shedule $shedule)
     {
-        if ($shedules->user_id != Auth::id()) {
-            abort(403);
-        }
+        Gate::authorize('update', $shedule);
 
         $request->validate([
             'shedule_name' => 'required|string|max:255',
@@ -56,19 +62,34 @@ class SheduleController extends Controller
             'end_time' => 'required|date|after_or_equal:today',
         ]);
 
-        $shedules->shedules()->update($request->all());
+        DB::beginTransaction();
+        try {
+            // Add your logic here
 
-        return redirect()->route('schedules.index')->with('success', 'Task updated successfully.');
+            $shedule->shedules()->update($request->all());
+
+            DB::commit();
+            return response()->json(['data' => 'Shedule has been updated successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. shedule is not updated'], 500);
+        }
     }
 
     public function destroy(Shedule $schedule)
     {
-        if ($schedule->user_id != Auth::id()) {
-            abort(403);
-        }
 
-        $schedule->delete();
-        notify()->success('Your shedule has been deleted successfully' , 'Shedule Deleted');
-        return redirect()->route('schedules.index');
+        Gate::authorize('update', $schedule);
+
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $schedule->delete();
+            DB::commit();
+            return response()->json(['data' => 'Shedule has been deleted successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. shedule  is not deleted'], 500);
+        }
     }
 }

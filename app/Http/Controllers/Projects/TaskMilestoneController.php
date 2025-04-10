@@ -12,6 +12,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class TaskMilestoneController extends Controller
 {
@@ -26,7 +27,7 @@ class TaskMilestoneController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create(Task $task): View
+    public function create(Task $task)
     {
         $task->loadSum('taskmilestones', 'word_count');
 
@@ -51,17 +52,10 @@ class TaskMilestoneController extends Controller
             return $user->id == Auth::user()->id;
         });
 
-        if ($userInTeam) {
-            // Notify success if the authenticated user is part of the team
-            notify()->success('Here select the user to assign the role');
-        } else {
-            // Abort if the authenticated user is not part of the team
-            abort(403, 'Unauthorized action. You are not that user from the team to which the task is assigned.');
+        if (!$userInTeam) {
+            return response()->json(['data' => 'You are unautherize to do this'], 403);
         }
-
-        // dd($task);
-
-        return view('task.taskmilestones.create', compact('task', 'users'));
+        return response()->json(['data' => [$task, $users]], 200);
     }
 
 
@@ -124,17 +118,12 @@ class TaskMilestoneController extends Controller
                 $assignedUser = User::find($validated['assigned_to'][$index]);
                 $assignedUser->notify(new EmployeeTaskAssigned($taskmilestone));
             }
-
-
-
             DB::commit();
-
-            notify()->success('Your schedules about the tasks have been added successfully', 'Task Schedule');
+            return response()->json(['data' => 'Taskmilestone has been added successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            notify()->error('Oops! Something went wrong. Kindly contact the developer for help', 'Task Schedule');
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-        return redirect()->route('task.index');
     }
 
 
@@ -169,14 +158,17 @@ class TaskMilestoneController extends Controller
     public function destroy(String $id)
     {
         $taskmilestone = TaskMilestone::find($id);
+        Gate::authorize('delete', $taskmilestone);
 
-        if ($taskmilestone->assigned_by != Auth::user()->id) {
-            abort(403);
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $taskmilestone->delete();
+            DB::commit();
+            return response()->json(['data' => 'Taskmilestone has been deleted successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
         }
-
-        $taskmilestone->delete();
-
-        notify()->success('Task Milestone has been deleted Successfully', 'Task MileStone Delete');
-        return redirect()->back();
     }
 }

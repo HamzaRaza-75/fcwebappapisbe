@@ -82,28 +82,27 @@ class TeamrequestController extends Controller
             ]);
 
             DB::commit();
-
-            notify()->success('You have successfully accepted the request.');
-
+            return response()->json(['data' => 'User has been accepted Successfully'], 200);
         } catch (Exception $e) {
             DB::rollBack();
-            notify()->error('Oops! Something went wrong: ' . $e->getMessage());
+            return response()->json(['data' => 'Opps ! some error occur while accepting user'], 500);
         }
-        return redirect()->back();
     }
 
     public function rejectteamrequest(string $id)
     {
-        $teamrequest = TeamRequest::find($id)->update([
-            'request_status' => 'rejected'
-        ]);
-
-        if ($teamrequest) {
-            notify()->success('you have rejected the request successfully');
-        } else {
-            notify()->error('data might be not changed or change with error in database please contact with developer');
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $teamrequest = TeamRequest::find($id)->update([
+                'request_status' => 'rejected'
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'Team Request has been rejected successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. some error occur while accepting team request'], 500);
         }
-        return redirect()->back();
     }
     /**
      * Display the specified resource.

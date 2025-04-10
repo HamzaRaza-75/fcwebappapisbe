@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class TeamController extends Controller
 {
@@ -24,20 +26,27 @@ class TeamController extends Controller
      */
     public function index()
     {
-        $teams = User::with(['userteam' =>
-        ['company' , 'teamposition']
+        $teams = User::with([
+            'userteam' =>
+            ['company', 'teamposition']
         ])->find(Auth::id());
 
         $userteams = $teams->userteam->pluck('id')->toArray();
 
-        $teams = Team::whereIn('id' , $userteams)->with('company', 'teamposition')->withCount(['userteam' , 'teamposition'])->get();
+        $teams = Team::whereIn('id', $userteams)->with('company', 'teamposition')->withCount(['userteam', 'teamposition'])->get();
         $team_count = $teams->count();
         $totalemployess = $teams->sum('userteam_count');
         $teampositions = $teams->sum('teamposition_count');
-        $activetasks = Task::whereIn('id' , $userteams)->where('status','incomplete')->count();
+        $activetasks = Task::whereIn('id', $userteams)->where('status', 'incomplete')->count();
 
-        // dd($teams);
-        return view('teamcaptain.team.index', compact('teams', 'team_count' , 'totalemployess' , 'teampositions' , 'activetasks'));
+        $response = [
+            $teams,
+            $team_count,
+            $totalemployess,
+            $teampositions,
+            $activetasks,
+        ];
+        return response()->json(['data' => $response], 200);
     }
 
     /**
@@ -46,14 +55,7 @@ class TeamController extends Controller
     public function create()
     {
         $companies = Company::select('id', 'company_name')->get();
-
-        if(count($companies) <= 0)
-        {
-            notify()->info('Please Add the company first' , 'Create Company');
-            return to_route('company.index');
-        }
-
-        return view('teamcaptain.team.create', compact('companies'));
+        return response()->json(['data' => $companies], 200);
     }
 
     /**
@@ -61,14 +63,19 @@ class TeamController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'team_name' => 'required|unique:companies,company_name|max:255',
+        $validation = Validator::make($request->all(), [
+            'team_name' => 'required|max:255|unique:teams,team_name',
             'description' => 'required|max:400',
             'team_image' => 'nullable|image|max:4048',
             'company_id' => 'required',
             'position_name.*' => 'required|max:100',
         ]);
 
+        if ($validation->fails()) {
+            return response()->json(['data' => $validation->errors()], 422);
+        }
+
+        $validation->validate();
 
         $team_image = uploadFile($request, 'team_image');
 
@@ -95,20 +102,18 @@ class TeamController extends Controller
             $user->userteam()->attach($team);
 
             DB::commit();
-            notify()->success('Company has been added successfully ⚡️');
+            return response()->json(['data' => 'Team has been created sucessfully'], 200);
         } catch (Exception $e) {
 
             DB::rollBack();
-            notify()->error('Something went wrong.... Please try again later' . $e->getMessage());
+            return response()->json(['data' => 'Oppsss! something went wrong'], 500);
         }
-
-        return to_route('team.index');
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(TeamProjectsChart $chart, string $id)
+    public function show(string $id)
     {
         $team = Team::with([
             'userteam' => function ($query) {
@@ -121,7 +126,7 @@ class TeamController extends Controller
             'tasks' => function ($query) {
                 $query->where('status', 'incomplete'); // Use constant for status
             },
-            'tasks.user.userteam' // Correctly include the user relationship within tasks
+            'tasks.user.userteam' // include the user relationship within tasks
         ])
             ->withCount([
                 'tasks',
@@ -148,7 +153,8 @@ class TeamController extends Controller
             }
         }
 
-        return view('teamcaptain.team.view', compact('team'), ['chart' => $chart->build([$team->activetasks, $team->cancelledtasks, $team->completedtasks], $team->team_name)]);
+        $response = [$team, $team->activetasks, $team->cancelledtasks, $team->completedtasks];
+        return response()->json(['data' => $response], 200);
     }
 
     /**
@@ -168,59 +174,95 @@ class TeamController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $request->validate([
-            'team_name' => 'required|max:255',
+
+        $validation = Validator::make($request->all(), [
+            'team_name' => ['required|max:255', Rule::unique('teams', 'team_name')->ignore($id)],
             'description' => 'required|max:400',
             'team_image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'company_id' => 'required',
         ]);
 
-        $team = Team::findOrFail($id);
+        if ($validation->fails()) {
+            return response()->json(['data' => $validation->errors()], 422);
+        }
 
+        $validation->validate();
+
+        $team = Team::findOrFail($id);
         if ($request->hasFile('team_image')) {
             $team_image = uploadFile($request, 'team_image');
         } else {
             $team_image = $team->team_image;
         }
 
-        $team->update([
-            'team_name' => trim($request->team_name),
-            'slug' => Str::slug($request->team_name, '-'),
-            'description' => trim($request->description),
-            'team_image' => $team_image,
-            'company_id' => $request->company_id,
-        ]);
-
-        notify()->success('Team has been updated successfully ⚡️');
-        return to_route('team.index');
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $team->update([
+                'team_name' => trim($request->team_name),
+                'slug' => Str::slug($request->team_name, '-'),
+                'description' => trim($request->description),
+                'team_image' => $team_image,
+                'company_id' => $request->company_id,
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'Team has been updated successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Team is not updated successfully'], 500);
+        }
     }
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(string $id)
     {
-        Team::find($id)->delete();
-        notify()->success('Team has been deleted successfully', 'Team Deleted Successfully');
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            Team::find($id)->delete();
+            DB::commit();
+            return response()->json(['data' => 'Data has been deleted successfully'], 201);
+        } catch (Exception $exception) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Data is not deleted'], 500);
+        }
     }
 
     public function positioncreate(Team $team, Request $request)
     {
-        // $position->delete();
-        $validation = $request->validate([
+        $validation = Validator::make($request->all(), [
             'position_name' => 'required',
         ]);
 
-        $team->teamposition()->create($request->all());
-        notify()->success('New Team position has been inserted successfully', 'Team position Inserted');
-        return redirect()->back();
+        if ($validation->fails()) {
+            return response()->json(['data' => $validation->errors()], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $team->teamposition()->create($request->all());
+            DB::commit();
+            return response()->json(['data' => 'Position has been added successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. position  is not created'], 500);
+        }
     }
 
 
     public function positiondestroy(TeamPositions $position)
     {
-        $position->delete();
-        notify()->success('Team position has been deleted successfully', 'Team position Deleted');
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            DB::commit();
+            $position->delete();
+            return response()->json(['data' => 'position has been deleted successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. position  is not deleted'], status: 500);
+        }
     }
 }

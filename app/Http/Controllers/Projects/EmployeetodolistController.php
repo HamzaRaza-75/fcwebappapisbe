@@ -27,17 +27,24 @@ class EmployeetodolistController extends Controller
             $query->where('revision', 0);
         }], 'word_count')->findOrFail($id);
 
-        // dd($employesstdls);
-        return view('task.viewtdl', compact('employesstdls'));
+        return response()->json(['data' => [$employesstdls]], 200);
     }
 
 
     public function markascomplete(string $id)
     {
-        TaskMilestone::findOrFail($id)->update([
-            'status' => 'complete',
-        ]);
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            TaskMilestone::findOrFail($id)->update([
+                'status' => 'complete',
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'Task has been completed successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
+        }
     }
 
     public function reassigntask(Actionplan $todolist, Request $request)
@@ -73,26 +80,36 @@ class EmployeetodolistController extends Controller
                 'start_working_at' => $request->deadline_date,
             ]);
             DB::commit();
+            return response()->json(['data' => 'Task has been reassigned successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack();
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-
-
-        return redirect()->back();
     }
 
     public function seenreasing($id)
     {
-        $revision = TaskRevision::findorFail($id);
-
-        $revision->update([
-            'seen_at' => Carbon::now(),
-        ]);
-
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $revision = TaskRevision::findorFail($id);
+            $revision->update([
+                'seen_at' => Carbon::now(),
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'Revision has been seen'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
+        }
     }
 
 
+
+    // *
+    // **
+    // ***
+    // iss waly function mein koi error hy isko dekh lena
 
     public function taskstore(Request $request, $id)
     {
@@ -100,17 +117,24 @@ class EmployeetodolistController extends Controller
             // validation rules here
         ]);
 
-        $taskTodolist = Task::findOrFail($id);
-        // update taskTodolist properties
-        $taskTodolist->actionplan()->create([
-            'submited_to' => 1,
-            'submited_by' => 2,
-            'task_file' => null,
-            'task_starting_date' => Carbon::now(),
-            'task_submition_date' => Carbon::now(),
-        ]);
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $taskTodolist = Task::findOrFail($id);
+            $taskTodolist->actionplan()->create([
+                'submited_to' => 1,
+                'submited_by' => 2,
+                'task_file' => null,
+                'task_starting_date' => Carbon::now(),
+                'task_submition_date' => Carbon::now(),
+            ]);
 
-        dd('task todo list added successfully');
+            DB::commit();
+            return response()->json(['data' => '/n has been ( ) successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
+        }
     }
 
 
@@ -148,12 +172,12 @@ class EmployeetodolistController extends Controller
             ]);
 
             DB::commit();
+            return response()->json(['data' => 'Todo list has been saved successfully'], 201);
         } catch (\Exception $e) {
 
             DB::rollBack();
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-
-        return redirect()->back();
     }
 
 
@@ -182,6 +206,7 @@ class EmployeetodolistController extends Controller
             ->where('revision', false)
             ->get();
 
+        return response()->json(['data' => [$revisions, $todolists]], 200);
         return view('employess.tdls.reassigntdl', compact('revisions', 'todolists'));
     }
 }

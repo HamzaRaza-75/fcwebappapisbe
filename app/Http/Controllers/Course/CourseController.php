@@ -19,8 +19,7 @@ class CourseController extends Controller
     {
         $courses = Course::with(['creater'])->where('status', 'approved')->withCount('lessons')->get();
         $selfcourse = Course::where('creater_id', Auth::id())->get();
-
-        return view('employess.course.dashboard.index', compact('courses', 'selfcourse'));
+        return response()->json(['data' => [$courses, $selfcourse]], 200);
     }
 
     /**
@@ -28,7 +27,10 @@ class CourseController extends Controller
      */
     public function create()
     {
-        return view('employess.course.dashboard.create');
+        // do the createor logic here
+        // if user has creator access then he can go to this route
+
+        // return view('employess.course.dashboard.create');
     }
 
     /**
@@ -76,12 +78,11 @@ class CourseController extends Controller
             $course->save();
 
             DB::commit();
-            notify()->success('Your Course Has been added successfully.', 'Course Created Successfully');
+            return response()->json(['data' => 'Course has been created successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            notify()->success('Oppsss !!! Something went wrong . Course is not created.', 'Error');
+            return response()->json(['data' => 'Oppsss sorry something went wrong'], 500);
         }
-        return to_route('course.index');
     }
 
     /**
@@ -95,11 +96,11 @@ class CourseController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id): View
+    public function edit(string $id)
     {
         $course = Course::findOrFail($id);
         // dd($course);
-        return view('employess.course.dashboard.edit', compact('course'));
+        return response()->json(['data' => [$course]], 200);
     }
 
     /**
@@ -136,13 +137,11 @@ class CourseController extends Controller
             $course->save();
 
             DB::commit();
-            notify()->success('Your Course has been updated successfully.', 'Course Updated Successfully');
+            return response()->json(['data' => 'Data hasbeen saved successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            notify()->error('Oops! Something went wrong. The course could not be updated.', 'Error');
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-
-        return to_route('course.index');
     }
 
 
@@ -151,8 +150,15 @@ class CourseController extends Controller
      */
     public function destroy(string $id)
     {
-        Course::findOrFail($id)->delete();
-        notify()->success('The course which you have created is deleted successfully', 'Course Deleted');
-        return redirect()->back();
+
+        DB::beginTransaction();
+        try {
+            Course::findOrFail($id)->delete();
+            DB::commit();
+            return response()->json(['data' => 'Course has been deleted successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. something went wrong'], 500);
+        }
     }
 }

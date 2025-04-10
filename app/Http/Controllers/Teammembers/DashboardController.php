@@ -11,6 +11,7 @@ use App\Models\UserDetail;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 use App\Notifications\UserRequestNotification;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -21,11 +22,10 @@ class DashboardController extends Controller
     {
 
         // $testingquery = ;
-        dd(User::with('courses')->toSql());
-
+        // dd(User::with('courses')->toSql());
 
         $teams = Team::whereNotNull('company_id')->get();
-        return view('welcome', compact('teams'));
+        return response()->json(['data' => $teams], 200);
     }
 
     /**
@@ -45,56 +45,28 @@ class DashboardController extends Controller
     {
         // dd(Auth::user());
         $roles = Auth::user()->roles;
-        foreach ($roles as $role) {
-            $roles = $role->name;
-        }
-
-        switch ($roles) {
-            case 'team-captain':
-                return redirect()->intended('teamcaptain/dashboard');
-                break;
-
-            case 'bussiness-administration-manager':
-                return redirect()->intended('teamcaptain/dashboard');
-                break;
-
-            case 'team-leader':
-                return redirect()->intended('teamcaptain/dashboard');
-                break;
-
-            case 'human-resources':
-                return redirect()->intended('teamcaptain/dashboard');
-                break;
-
-            case 'team-member':
-                return redirect()->intended('employee/dashboard');
-                break;
-
-            default:
-                notify()->error('you have not been assigned any role till now', 'Does Not have any role');
-                return redirect()->intended('/');
-        }
+        return response()->json(['data' => $roles], 200);
     }
 
 
     public function coursedashboard()
     {
         // dd(Auth::user());
-        $roles = Auth::user()->roles;
-        $bit = 0;
-        foreach ($roles as $role) {
-            $bit = 1;
-        }
+        // $roles = Auth::user()->roles;
+        // $bit = 0;
+        // foreach ($roles as $role) {
+        //     $bit = 1;
+        // }
 
-        switch ($bit) {
-            case '1':
-                return to_route('course.index');
-                break;
+        // switch ($bit) {
+        //     case '1':
+        //         return to_route('course.index');
+        //         break;
 
-            default:
-                notify()->error('You are not the member of our team', 'Not Allowed');
-                return redirect()->intended('/');
-        }
+        //     default:
+        //         notify()->error('You are not the member of our team', 'Not Allowed');
+        //         return redirect()->intended('/');
+        // }
     }
 
 
@@ -104,8 +76,7 @@ class DashboardController extends Controller
         $teamrequest = TeamRequest::where('user_id', $userid)->count();
         // dd($teamrequest);
         if ($teamrequest > 0) {
-            notify()->warning('You have already applied for the request wait for it');
-            return to_route('welcome.index');
+            return response()->json(['data' => 'You have already requested for the team'], 403);
         } else {
             $request->validate([
                 'phone_no' => 'required|numeric',
@@ -136,19 +107,22 @@ class DashboardController extends Controller
 
             $user = User::find(Auth::user()->id);
 
-            $userdetail = $user->userdetail()->create([
-                'user_id' => Auth::user()->id,
-                'phone_no' => $request->phone_no,
-                'gurdian_name' => $request->gurdian_name,
-                'gurdian_phone_no' => $request->gurdian_phone_no,
-                'CNIC_image' => $CNIC_image,
-                'dateofbirth' => $request->dateofbirth,
-                'gender' => $request->gender,
-                'profile_image' => $profile_image,
-                'current_address' => $request->current_address
-            ]);
 
-            if ($userdetail) {
+            DB::beginTransaction();
+            try {
+                // Add your logic here
+                $userdetail = $user->userdetail()->create([
+                    'user_id' => Auth::user()->id,
+                    'phone_no' => $request->phone_no,
+                    'gurdian_name' => $request->gurdian_name,
+                    'gurdian_phone_no' => $request->gurdian_phone_no,
+                    'CNIC_image' => $CNIC_image,
+                    'dateofbirth' => $request->dateofbirth,
+                    'gender' => $request->gender,
+                    'profile_image' => $profile_image,
+                    'current_address' => $request->current_address
+                ]);
+
                 $teamrequest = TeamRequest::create([
                     'user_id' => Auth::user()->id,
                     'role_id' => $request->role_id,
@@ -156,10 +130,11 @@ class DashboardController extends Controller
                     'team_id' => $id,
                 ]);
 
-                if ($teamrequest) {
-                    notify()->success('You have successfully Applied for Team Now wait for request accept');
-                    return to_route('welcome.index');
-                }
+                DB::commit();
+                return response()->json(['data' => 'You have successfully requested for the team'], 201);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return response()->json(['data' => 'Oops. some error occur while requesting'], 500);
             }
         }
     }
@@ -168,10 +143,21 @@ class DashboardController extends Controller
      */
     public function show(string $id)
     {
-        $teams = Team::with('teamposition')->where('id', $id)->get();
+        // Check if the user has any teams
+        if (Auth::user()->teamrequest()->count() > 0) {
+            return response()->json(['data' => 'You have already requested to the team'], 403);
+        }
+
+        // Fetch team and roles if no user teams exist
+        $team = Team::with('teamposition')->find($id); // Use find() for single record
         $roles = Role::where('name', '!=', 'super-admin')->get();
-        // dd($roles);
-        return view('dashboard', compact('teams', 'roles'));
+
+        return response()->json([
+            'data' => [
+                'roles' => $roles,
+                'team' => $team
+            ]
+        ], 200);
     }
 
     /**

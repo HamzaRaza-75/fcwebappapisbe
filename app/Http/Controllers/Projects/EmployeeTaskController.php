@@ -7,7 +7,6 @@ use App\Models\TaskMilestone;
 use App\Models\User;
 use App\Notifications\EmployeeTaskSubmitted;
 use Carbon\Carbon;
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,14 +16,13 @@ class EmployeeTaskController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): View
+    public function index()
     {
         $taskmilestone = TaskMilestone::assigneduser()->with('assignedTo', 'assignedFrom', 'task.user')
             ->where('status', 'incomplete')
             ->get();
 
-        // dd($taskmilestone);
-        return view('employess.tasks.index', compact('taskmilestone'));
+        return response()->json(['data' => [$taskmilestone]], 200);
     }
 
 
@@ -62,32 +60,35 @@ class EmployeeTaskController extends Controller
             $user->notify(new EmployeeTaskSubmitted($taskmilestone));
 
             DB::commit();
-            notify()->success('Your Action Plan Has been created sucessfully');
+            return response()->json(['data' => 'Data has been saved successfully'], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            notify()->error('Oppps . Something went wrong');
+            return response()->json(['data' => 'Oppsss ! something went wrong'], 500);
         }
-        return redirect()->back();
     }
     /**
      * Display the specified resource.
      */
     public function show(TaskMilestone $taskmilestone)
     {
-        $taskmilestone->loadCount('actionplan');
-        if ($taskmilestone->assigned_to == Auth::user()->id) {
-            if ($taskmilestone->seen_at == null) {
-                // dd('entering in the second funciton');
-                $taskmilestone->update([
-                    'seen_at' => Carbon::now(),
-                ]);
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $taskmilestone->loadCount('actionplan');
+            if ($taskmilestone->assigned_to == Auth::user()->id) {
+                if ($taskmilestone->seen_at == null) {
+                    // dd('entering in the second funciton');
+                    $taskmilestone->update([
+                        'seen_at' => Carbon::now(),
+                    ]);
+                }
             }
-        } else {
-            abort(403, 'Only the employee which have assigned the task can see this page');
+            DB::commit();
+            return response()->json(['data' => 'You have seen the project successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
         }
-        // dd($taskmilestone);
-
-        return view('employess.tasks.view', compact('taskmilestone'));
     }
 
     /**

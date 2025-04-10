@@ -4,13 +4,13 @@ namespace App\Http\Controllers\Superadmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Actionplan;
-use App\Models\TaskMilestone;
 use App\Models\Team;
 use App\Models\User;
-use ArielMejiaDev\LarapexCharts\LarapexChart;
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Spatie\Permission\Models\Role as ModelsRole;
 
@@ -19,7 +19,7 @@ class EmployessController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): View
+    public function index()
     {
         $users = User::with('userteam')->find(Auth::user()->id);
         $logged_team = $users->userteam->pluck('id')->toArray();
@@ -51,9 +51,11 @@ class EmployessController extends Controller
             return $team->userteam->where('id', '!=', Auth::id())->count(); // Sum up the count of users in each team
         });
 
-        return view('user.index', compact('logged_team_users', 'alluser', 'blockedusers', 'officebased', 'assignmentbase', 'sepreate_users'));
-    }
 
+        $response = ['logged_team_users', 'alluser', 'blockedusers', 'officebased', 'assignmentbase', 'sepreate_users'];
+
+        return response()->json(['data' => $response], 200);
+    }
     /**
      * Show the form for creating a new resource.
      */
@@ -78,7 +80,7 @@ class EmployessController extends Controller
             }])
             ->get();
 
-        return view('user.freeemployess', compact('teams'));
+        return response()->json(['data' => [$teams]], 200);
     }
 
     /**
@@ -92,10 +94,11 @@ class EmployessController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Request $request, string $id): View
+    public function show(Request $request, string $id)
     {
         $chart = null;
         $chart2 = null;
+        $userid = htmlspecialchars($id);
 
         $roles = ModelsRole::all();
         $teams = Team::with('userteam')->get();
@@ -112,7 +115,7 @@ class EmployessController extends Controller
             SUM(CASE WHEN revision = 1 THEN 1 ELSE 0 END) as revisions,
             SUM(CASE WHEN revision = 0 THEN 1 ELSE 0 END) as accepted
         ")
-                ->where('submited_by', $id)
+                ->where('submited_by', $userid)
                 ->whereYear('created_at', Carbon::now()->year)
                 ->groupBy('month')
                 ->orderBy('month')
@@ -129,27 +132,28 @@ class EmployessController extends Controller
             }
 
 
-
             // Word Count
-            $chart = (new LarapexChart)->pieChart()
-                ->setTitle('Total Word count')
-                ->addData([
-                    TaskMilestone::where('status', 'complete')->where('assigned_to', $id)->sum('word_count'),
-                ])
-                ->setLabels(['Total WordCount']);
+            //     $chart = (new LarapexChart)->pieChart()
+            //         ->setTitle('Total Word count')
+            //         ->addData([
+            //             TaskMilestone::where('status', 'complete')->where('assigned_to', $id)->sum('word_count'),
+            //         ])
+            //         ->setLabels(['Total WordCount']);
 
-            $chart2 = (new LarapexChart)->barChart()
-                ->setTitle('Work Report.')
-                ->setSubtitle('Employee Progress During the current year.' . Carbon::now()->year)
-                ->addData('approved', $approved)
-                ->addData('revisions', $revisions)
-                ->setXAxis($months);
+            //     $chart2 = (new LarapexChart)->barChart()
+            //         ->setTitle('Work Report.')
+            //         ->setSubtitle('Employee Progress During the current year.' . Carbon::now()->year)
+            //         ->addData('approved', $approved)
+            //         ->addData('revisions', $revisions)
+            //         ->setXAxis($months);
+            // }
+
+            // dd($chart);
         }
 
-        // dd($chart);
+        return response()->json(['data' => [$roles, $teams, $user]], 200);
 
-
-        return view('user.view', compact('roles', 'teams', 'user', 'chart', 'chart2'));
+        // return view('user.view', compact('roles', 'teams', 'user', 'chart', 'chart2'));
     }
 
     /**
@@ -167,18 +171,26 @@ class EmployessController extends Controller
     {
         // this is the module for creating the update users with allow him multiple team and multiple roles
 
-        $user = User::find($id);
-        $teamrequest = Team::findMany($request->teams);
-        $user->userteam()->detach();
-        foreach ($teamrequest as $teamreq) {
-            $user->userteam()->attach([$teamreq->id]);
+
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $user = User::find($id);
+            $teamrequest = Team::findMany($request->teams);
+            $user->userteam()->detach();
+            foreach ($teamrequest as $teamreq) {
+                $user->userteam()->attach([$teamreq->id]);
+            }
+
+            $roles = ModelsRole::findByName($request->roles);
+            $user->syncRoles([$roles]);
+
+            DB::commit();
+            return response()->json(['data' => 'User has assignend roles successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. role is not assigned'], 500);
         }
-
-        $roles = ModelsRole::findByName($request->roles);
-        $user->syncRoles([$roles]);
-
-        notify()->success('You have successfully updated the roles of users');
-        return redirect()->back();
     }
 
     /**
@@ -186,36 +198,67 @@ class EmployessController extends Controller
      */
     public function destroy(string $id)
     {
-        $user = User::find($id);
-        $user->delete();
+
+        DB::beginTransaction();
+
+        try {
+            $user = User::find($id);
+            $user->delete();
+            DB::commit();
+            return response()->json(['data' => 'User has been deleted successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. user is not deleted '], 500);
+        }
     }
 
     public function blockUser(string $id)
     {
-        $user = User::find($id)->update([
-            'status' => 'blocked',
-        ]);
 
-        notify()->success('user has been blocked successfully', 'Block user');
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $user = User::find($id)->update([
+                'status' => 'blocked',
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'User has been blocked successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. user is not blocked'], 500);
+        }
     }
 
     public function unblockUser(string $id)
     {
-        $user = User::find($id)->update([
-            'status' => 'active',
-        ]);
 
-        notify()->success('user has been unblocked successfully', 'Unblock user');
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $user = User::find($id)->update([
+                'status' => 'active',
+            ]);
+            DB::commit();
+            return response()->json(['data' => 'User has been unblocked successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. user is not unblocked'], 500);
+        }
     }
 
 
     public function deleteNotification()
     {
-        $user = User::find(Auth::id());
-        $user->notifications()->delete();
-        notify()->success('All notification has been readed sucessfully');
-        return redirect()->back();
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            $user = User::find(Auth::id());
+            $user->notifications()->delete();
+            DB::commit();
+            return response()->json(['data' => 'notifications has been deleted successfully'], 201);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. your notificaitons is not deleted'], 500);
+        }
     }
 }

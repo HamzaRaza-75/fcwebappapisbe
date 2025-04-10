@@ -20,9 +20,6 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/course/dashboard/check', [DashboardController::class, 'coursedashboard'])->middleware(['auth', 'verified'])->name('course.dashboard.check');
 
-
-
-
 Route::middleware(['auth', 'role:super-admin|team-captain|bussiness-development-manager|team-leader|team-member'])->prefix('learners')->group(function () {
 
     // routes for course controller starts here
@@ -49,7 +46,17 @@ Route::middleware(['auth', 'role:super-admin|team-captain|bussiness-development-
 
     //route for course request controller
 
+    // * bhai isko theek krna hy
+    // **
+    // ***
+    // ****
+    // *****
     Route::get('/course/{course}/request/enroll', [EmployeecorseController::class, 'store'])->name('course.request.done');
+    // *****
+    // ****
+    // ***
+    // **
+    // *
 });
 
 // the routes for higher authorities ends here

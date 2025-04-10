@@ -2,28 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Charts\EmployeeChart;
 use App\Http\Requests\ProfileUpdateRequest;
 use App\Models\Actionplan;
-use App\Models\TaskMilestone;
-use App\Models\Team;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\View\View;
-use Spatie\Permission\Models\Role;
 
 class ProfileController extends Controller
 {
     /**
      * Display the user's profile form.
      */
-    public function edit(Request $request): View
+    public function edit()
     {
-
         $users = User::withCount([
             'actionplan as without_task_revision' => function ($query) {
                 $query->whereDoesntHave('taskrevision');
@@ -60,11 +55,12 @@ class ProfileController extends Controller
             $revisions[] = $milestone->revisions;
         }
 
-
-        return view('user.edit', [
+        $response = [
             'user' => $users,
-            // 'chart' => $chart->build($months, $approved, $revisions),
-        ]);
+            'chart' => [$months, $approved, $revisions],
+        ];
+
+        return response()->json(['data' => [$response]], 200);
     }
 
 
@@ -74,17 +70,20 @@ class ProfileController extends Controller
             'skill_tags.*' => 'required|string',
         ]);
 
-        $user = Auth::user();
-
-        // Create the skill tags for the user
-        foreach ($validated['skill_tags'] as $skillTag) {
-            $user->skills()->create([
-                'skills_tags' => $skillTag,
-            ]);
+        DB::beginTransaction();
+        try {
+            // Add your logic here
+            foreach ($validated['skill_tags'] as $skillTag) {
+                Auth::user()->skills()->create([
+                    'skills_tags' => $skillTag,
+                ]);
+            }
+            DB::commit();
+            return response()->json(['data' => 'Skills has been added successfully'], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['data' => 'Oops. Something went wrong'], 500);
         }
-
-
-        return to_route('profile.edit');
     }
 
     /**

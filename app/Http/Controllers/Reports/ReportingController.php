@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 
 class ReportingController extends Controller
 {
-    public function employeeactionplanreport(Request $request): View
+    public function employeeactionplanreport(Request $request)
     {
         // Get all teams that have tasks or projects associated with them
         $teams = Team::whereHas('tasks')->get();
@@ -62,12 +62,11 @@ class ReportingController extends Controller
             $totalwordcount = $tasksQuery->sum('word_count');
         }
 
-        // Return the view with both 'teams' and 'mainquery' data
-        return view('reports.crossteam', compact('teams', 'tasks', 'totalcount', 'totalwordcount', 'totalhours'));
+        return response()->json(['data' => [$teams, $tasks, $totalcount, $totalwordcount, $totalhours]], 200);
     }
 
 
-    public function projectwithtimelinereport(Request $request): View
+    public function projectwithtimelinereport(Request $request)
     {
         // Initialize null results for both tasks and projects
         $resultA = null;
@@ -86,16 +85,11 @@ class ReportingController extends Controller
                 ->withSum('taskmilestones', 'worth')
                 ->withSum('actionplanon', 'worth')
                 ->first();
-            if ($resultA == null) {
-                notify()->error('Record not found', '404');
-            }
         }
 
 
 
         // Pass results to the view, even if both are null
-        return view('reports.projecttimeline', [
-            'tasks' => $resultA
-        ]);
+        return response()->json(['data' => [$resultA]], 200);
     }
 }
