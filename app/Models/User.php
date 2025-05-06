@@ -98,8 +98,6 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
-
-
     // scopes starts here
 
     public function scopeTrueuser(Builder $query): void
