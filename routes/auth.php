@@ -12,8 +12,7 @@ Route::post('/register', [RegisteredUserController::class, 'store'])
     ->middleware('guest')
     ->name('register');
 
-Route::post('/login', [AuthenticatedSessionController::class, 'store'])
-    ->middleware('guest')
+Route::post('/login', [AuthenticatedSessionController::class, 'login'])
     ->name('login');
 
 Route::post('/forgot-password', [PasswordResetLinkController::class, 'store'])
@@ -35,3 +34,8 @@ Route::post('/email/verification-notification', [EmailVerificationNotificationCo
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
+
+
+Route::get('testing', function () {
+    return 'hitting successfully';
+});

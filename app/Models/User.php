@@ -15,15 +15,17 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Str;
 use Spatie\Permission\Traits\HasRoles;
 use App\Models\Scopes\DescScope;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\ScopedBy;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable
+class User extends Authenticatable implements JWTSubject
 {
-    use HasApiTokens, HasFactory, Notifiable, HasRoles, HasUuids;
+    use  HasFactory, Notifiable, HasRoles, HasUuids;
 
     protected $with = ['userdetail'];
     /**
@@ -59,6 +61,43 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    public $incrementing = false;
+    protected $keyType = 'string';
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->{$model->getKeyName()})) {
+                $model->{$model->getKeyName()} = (string) Str::uuid();
+            }
+        });
+    }
+
+
+    // scopes starts here
+
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    /**
+     * Return a key value array, containing any custom claims to be added to the JWT.
+     *
+     * @return array
+     */
+    public function getJWTCustomClaims()
+    {
+        return [
+            'role' => $this->getRoleNames(),
+            'name' => $this->name,
+            'email' => $this->email
+        ];
+    }
+
 
 
     // scopes starts here

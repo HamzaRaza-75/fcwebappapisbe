@@ -2,37 +2,79 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\LoginRequest;
-use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Controller;
 
 class AuthenticatedSessionController extends Controller
 {
     /**
-     * Handle an incoming authentication request.
+     * Create a new AuthController instance.
+     *
+     * @return void
      */
-    public function store(LoginRequest $request): Response
+
+    /**
+     * Get a JWT via given credentials.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function login()
     {
-        $request->authenticate();
 
-        $request->session()->regenerate();
+        $credentials = request(['email', 'password']);
 
-        return response()->noContent();
+        if (! $token = auth()->attempt($credentials)) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        return $this->respondWithToken($token);
     }
 
     /**
-     * Destroy an authenticated session.
+     * Get the authenticated User.
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function destroy(Request $request): Response
+    public function me()
     {
-        Auth::guard('web')->logout();
+        return response()->json(auth()->user());
+    }
 
-        $request->session()->invalidate();
+    /**
+     * Log the user out (Invalidate the token).
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function logout()
+    {
+        auth()->logout();
 
-        $request->session()->regenerateToken();
+        return response()->json(['message' => 'Successfully logged out']);
+    }
 
-        return response()->noContent();
+    /**
+     * Refresh a token.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function refresh()
+    {
+        return $this->respondWithToken(auth()->refresh());
+    }
+
+    /**
+     * Get the token array structure.
+     *
+     * @param  string $token
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function respondWithToken($token)
+    {
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth()->factory()->getTTL() * 60
+        ]);
     }
 }
